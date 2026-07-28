@@ -1,0 +1,6 @@
+[zabbix_agents]
+server01 ansible_host=192.0.2.11 ansible_user=ansible
+server02 ansible_host=192.0.2.12 ansible_user=ansible
+
+[zabbix_agent2_pilot]
+server01

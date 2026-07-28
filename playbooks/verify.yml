@@ -1,0 +1,30 @@
+---
+- name: Verify Zabbix Agent 2
+  hosts: zabbix_agents
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Validate Agent 2 configuration
+      ansible.builtin.command:
+        argv:
+          - "{{ zabbix_agent2_binary | default('/usr/sbin/zabbix_agent2') }}"
+          - -T
+          - -c
+          - "{{ zabbix_agent2_config_file | default('/etc/zabbix/zabbix_agent2.conf') }}"
+      changed_when: false
+
+    - name: Check Agent 2 service
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - "{{ zabbix_agent2_service_name | default('zabbix-agent2') }}"
+      changed_when: false
+
+    - name: Check passive port
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ zabbix_agent2_listen_port | default(10050) }}"
+        state: started
+        timeout: 10

@@ -1,0 +1,251 @@
+---
+- name: Validate migration variables
+  ansible.builtin.assert:
+    that:
+      - zabbix_server_passive_allowlist | length > 0
+      - zabbix_server_passive_allowlist != "CHANGE_ME"
+      - ansible_os_family in ["Debian", "RedHat"]
+    fail_msg: >-
+      Set zabbix_server_passive_allowlist and use a supported Debian/Ubuntu
+      or RHEL-compatible target.
+
+- name: Check Agent 1 configuration
+  ansible.builtin.stat:
+    path: "{{ zabbix_agent1_config_file }}"
+  register: zabbix_agent1_config_stat
+
+- name: Require existing Agent 1 configuration
+  ansible.builtin.assert:
+    that:
+      - zabbix_agent1_config_stat.stat.exists
+      - zabbix_agent1_config_stat.stat.isreg
+    fail_msg: "Agent 1 configuration was not found at {{ zabbix_agent1_config_file }}."
+
+- name: Install Agent 2 on Debian family without automatically starting it
+  ansible.builtin.apt:
+    name: "{{ zabbix_agent2_package_name }}"
+    state: present
+    update_cache: "{{ zabbix_agent2_update_package_cache }}"
+    policy_rc_d: 101
+    lock_timeout: 120
+  when: ansible_os_family == "Debian"
+
+- name: Install Agent 2 on RHEL family
+  ansible.builtin.package:
+    name: "{{ zabbix_agent2_package_name }}"
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Keep Agent 2 stopped during configuration
+  ansible.builtin.service:
+    name: "{{ zabbix_agent2_service_name }}"
+    state: stopped
+
+- name: Create Agent 2 include directory
+  ansible.builtin.file:
+    path: "{{ zabbix_agent2_include_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Read Agent 1 main configuration
+  ansible.builtin.slurp:
+    path: "{{ zabbix_agent1_config_file }}"
+  register: zabbix_agent1_config_raw
+
+- name: Select Agent 1 Hostname entries
+  ansible.builtin.set_fact:
+    zabbix_agent1_hostname_entries: >-
+      {{
+        (zabbix_agent1_config_raw.content | b64decode).splitlines()
+        | select('match', '^[ \t]*Hostname[ \t]*=')
+        | map('regex_replace', '^[ \t]*Hostname[ \t]*=[ \t]*', '')
+        | list
+      }}
+
+- name: Resolve Agent 2 Hostname
+  ansible.builtin.set_fact:
+    zabbix_agent2_effective_hostname: >-
+      {{
+        zabbix_agent2_hostname_override
+        if zabbix_agent2_hostname_override | length > 0
+        else (zabbix_agent1_hostname_entries | last | default(''))
+      }}
+
+- name: Select inline UserParameter entries
+  ansible.builtin.set_fact:
+    zabbix_agent1_inline_userparameters: >-
+      {{
+        (zabbix_agent1_config_raw.content | b64decode).splitlines()
+        | select('match', '^[ \t]*UserParameter=')
+        | list
+      }}
+  when: zabbix_migrate_inline_userparameters
+
+- name: Write migrated inline UserParameter entries
+  ansible.builtin.copy:
+    content: "{{ (['# Migrated from zabbix_agentd.conf'] + zabbix_agent1_inline_userparameters) | join('\n') }}\n"
+    dest: "{{ zabbix_agent2_include_dir }}/zz-migrated-inline-userparameters.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - zabbix_migrate_inline_userparameters
+    - zabbix_agent1_inline_userparameters | length > 0
+
+- name: Remove empty managed inline UserParameter file
+  ansible.builtin.file:
+    path: "{{ zabbix_agent2_include_dir }}/zz-migrated-inline-userparameters.conf"
+    state: absent
+  when:
+    - zabbix_migrate_inline_userparameters
+    - zabbix_agent1_inline_userparameters | length == 0
+
+- name: Check possible Agent 1 include directories
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ zabbix_agent1_include_dirs }}"
+  register: zabbix_agent1_include_dir_stats
+  when: zabbix_migrate_include_userparameters
+
+- name: Find Agent 1 configuration fragments
+  ansible.builtin.find:
+    paths: "{{ item.item }}"
+    patterns: "*.conf"
+    file_type: file
+    recurse: false
+  loop: "{{ zabbix_agent1_include_dir_stats.results }}"
+  when:
+    - zabbix_migrate_include_userparameters
+    - item.stat.exists | default(false)
+    - item.stat.isdir | default(false)
+  register: zabbix_agent1_fragment_scan
+
+- name: Read Agent 1 configuration fragments
+  ansible.builtin.slurp:
+    path: "{{ item.1.path }}"
+  loop: "{{ zabbix_agent1_fragment_scan.results | subelements('files', skip_missing=True) }}"
+  register: zabbix_agent1_fragment_raw
+  when: zabbix_migrate_include_userparameters
+
+- name: Initialize fragment UserParameter list
+  ansible.builtin.set_fact:
+    zabbix_agent1_fragment_userparameters: []
+
+- name: Select UserParameter entries from fragments
+  ansible.builtin.set_fact:
+    zabbix_agent1_fragment_userparameters: >-
+      {{
+        zabbix_agent1_fragment_userparameters
+        + (
+          (item.content | b64decode).splitlines()
+          | select('match', '^[ \t]*UserParameter=')
+          | list
+        )
+      }}
+  loop: "{{ zabbix_agent1_fragment_raw.results | default([]) }}"
+  when:
+    - zabbix_migrate_include_userparameters
+    - item.content is defined
+
+- name: Write migrated fragment UserParameter entries
+  ansible.builtin.copy:
+    content: "{{ (['# Migrated from Agent 1 include files'] + zabbix_agent1_fragment_userparameters) | join('\n') }}\n"
+    dest: "{{ zabbix_agent2_include_dir }}/zz-migrated-include-userparameters.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - zabbix_migrate_include_userparameters
+    - zabbix_agent1_fragment_userparameters | length > 0
+
+- name: Remove empty managed fragment UserParameter file
+  ansible.builtin.file:
+    path: "{{ zabbix_agent2_include_dir }}/zz-migrated-include-userparameters.conf"
+    state: absent
+  when:
+    - zabbix_migrate_include_userparameters
+    - zabbix_agent1_fragment_userparameters | length == 0
+
+- name: Deploy passive Agent 2 configuration
+  ansible.builtin.template:
+    src: zabbix_agent2.conf.j2
+    dest: "{{ zabbix_agent2_config_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+
+- name: Validate Agent 2 configuration before cutover
+  ansible.builtin.command:
+    argv:
+      - "{{ zabbix_agent2_binary }}"
+      - -T
+      - -c
+      - "{{ zabbix_agent2_config_file }}"
+  changed_when: false
+
+- name: Test Agent 2 item keys before cutover
+  ansible.builtin.command:
+    argv:
+      - "{{ zabbix_agent2_binary }}"
+      - -t
+      - "{{ item }}"
+      - -c
+      - "{{ zabbix_agent2_config_file }}"
+  loop: "{{ zabbix_agent2_validation_keys }}"
+  register: zabbix_agent2_key_tests
+  changed_when: false
+  failed_when: >-
+    zabbix_agent2_key_tests.rc != 0 or
+    'ZBX_NOTSUPPORTED' in zabbix_agent2_key_tests.stdout or
+    '[m|' in zabbix_agent2_key_tests.stdout
+
+- name: Cut over services with automatic rollback on failure
+  block:
+    - name: Stop and disable Agent 1
+      ansible.builtin.service:
+        name: "{{ zabbix_agent1_service_name }}"
+        state: stopped
+        enabled: false
+
+    - name: Start and enable Agent 2
+      ansible.builtin.service:
+        name: "{{ zabbix_agent2_service_name }}"
+        state: started
+        enabled: true
+
+    - name: Wait for Agent 2 passive port
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ zabbix_agent2_listen_port }}"
+        state: started
+        timeout: 15
+
+  rescue:
+    - name: Stop Agent 2 after failed cutover
+      ansible.builtin.service:
+        name: "{{ zabbix_agent2_service_name }}"
+        state: stopped
+        enabled: false
+      ignore_errors: true
+
+    - name: Restore Agent 1 after failed cutover
+      ansible.builtin.service:
+        name: "{{ zabbix_agent1_service_name }}"
+        state: started
+        enabled: true
+      ignore_errors: true
+
+    - name: Report failed cutover
+      ansible.builtin.fail:
+        msg: >-
+          Agent 2 cutover failed. The role attempted to restore Agent 1.
+          Check the Agent 2 service log before retrying.
+
+- name: Report successful migration
+  ansible.builtin.debug:
+    msg: >-
+      Agent 2 is running on port {{ zabbix_agent2_listen_port }}.
+      Agent 1 remains installed for rollback.

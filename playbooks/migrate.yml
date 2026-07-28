@@ -1,0 +1,9 @@
+---
+- name: Migrate Zabbix Agent 1 to Agent 2
+  hosts: zabbix_agents
+  become: true
+  gather_facts: true
+  serial: "{{ zabbix_agent2_migration_serial | default(10) }}"
+
+  roles:
+    - role: zabbix_agent2_migration

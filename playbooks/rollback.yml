@@ -1,0 +1,26 @@
+---
+- name: Roll back to Zabbix Agent 1
+  hosts: zabbix_agents
+  become: true
+  gather_facts: false
+  serial: "{{ zabbix_agent2_migration_serial | default(10) }}"
+
+  tasks:
+    - name: Stop and disable Agent 2
+      ansible.builtin.service:
+        name: "{{ zabbix_agent2_service_name | default('zabbix-agent2') }}"
+        state: stopped
+        enabled: false
+
+    - name: Start and enable Agent 1
+      ansible.builtin.service:
+        name: "{{ zabbix_agent1_service_name | default('zabbix-agent') }}"
+        state: started
+        enabled: true
+
+    - name: Check passive port after rollback
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ zabbix_agent2_listen_port | default(10050) }}"
+        state: started
+        timeout: 10

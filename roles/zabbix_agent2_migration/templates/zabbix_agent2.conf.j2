@@ -1,0 +1,27 @@
+# Managed by Ansible: zabbix_agent2_migration
+# Passive checks are enabled with Server.
+# Active checks are enabled when ServerActive is configured.
+
+PidFile={{ zabbix_agent2_pid_file }}
+LogType=file
+LogFile={{ zabbix_agent2_log_file }}
+LogFileSize={{ zabbix_agent2_log_file_size }}
+
+Server={{ zabbix_server_passive_allowlist }}
+{% if zabbix_server_active | length > 0 %}
+ServerActive={{ zabbix_server_active }}
+{% if zabbix_agent2_effective_hostname | length > 0 %}
+Hostname={{ zabbix_agent2_effective_hostname }}
+{% endif %}
+{% endif %}
+ListenIP={{ zabbix_agent2_listen_ip }}
+ListenPort={{ zabbix_agent2_listen_port }}
+Timeout={{ zabbix_agent2_timeout }}
+
+Include={{ zabbix_agent2_include_dir }}/*.conf
+{% if zabbix_agent2_extra_config_lines | length > 0 %}
+
+{% for config_line in zabbix_agent2_extra_config_lines %}
+{{ config_line }}
+{% endfor %}
+{% endif %}

@@ -1,0 +1,32 @@
+---
+zabbix_server_passive_allowlist: "CHANGE_ME"
+zabbix_server_active: ""
+zabbix_agent2_hostname_override: ""
+
+zabbix_agent1_package_name: zabbix-agent
+zabbix_agent2_package_name: zabbix-agent2
+zabbix_agent1_service_name: zabbix-agent
+zabbix_agent2_service_name: zabbix-agent2
+
+zabbix_agent1_config_file: /etc/zabbix/zabbix_agentd.conf
+zabbix_agent2_config_file: /etc/zabbix/zabbix_agent2.conf
+zabbix_agent2_include_dir: /etc/zabbix/zabbix_agent2.d
+zabbix_agent2_binary: /usr/sbin/zabbix_agent2
+
+zabbix_agent2_pid_file: /run/zabbix/zabbix_agent2.pid
+zabbix_agent2_log_file: /var/log/zabbix/zabbix_agent2.log
+zabbix_agent2_log_file_size: 1
+zabbix_agent2_listen_port: 10050
+zabbix_agent2_listen_ip: "0.0.0.0"
+zabbix_agent2_timeout: 3
+
+zabbix_agent2_update_package_cache: false
+zabbix_migrate_inline_userparameters: true
+zabbix_migrate_include_userparameters: true
+zabbix_agent1_include_dirs:
+  - /etc/zabbix/zabbix_agentd.d
+  - /etc/zabbix/zabbix_agentd.conf.d
+zabbix_agent2_extra_config_lines: []
+
+zabbix_agent2_validation_keys:
+  - agent.ping
