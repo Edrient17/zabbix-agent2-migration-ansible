@@ -1,18 +1,20 @@
 # Zabbix Agent 2 Migration Ansible
 
 Zabbix Agent 1을 Agent 2로 순차 전환하는 Ansible 저장소입니다.
-Passive check를 유지하면서 필요한 경우 `ServerActive`와 기존 `Hostname`도 이전합니다.
+공통 `Server` 설정으로 Passive check를 유지하면서 필요한 경우 `ServerActive`와
+기존 `Hostname`도 이전합니다.
 
 ## 동작
 
 1. Agent 2 패키지 설치
-2. Agent 1의 메인 설정에 직접 작성된 `UserParameter` 이전
-3. 일반적인 Agent 1 include 디렉터리의 `*.conf`에서 `UserParameter=` 줄 이전
-4. 기존 Agent 1의 `Hostname`을 서버별로 Agent 2에 이전
-5. 공통 `ServerActive` 설정 적용
-6. Agent 2 설정 및 아이템 키 검증
-7. Agent 1 중지 후 Agent 2 시작
-8. 실패 시 Agent 1 자동 재시작
+2. 공통 `Server` 설정을 적용해 Passive check 유지
+3. Agent 1의 메인 설정에 직접 작성된 `UserParameter` 이전
+4. 일반적인 Agent 1 include 디렉터리의 `*.conf`에서 `UserParameter=` 줄 이전
+5. 기존 Agent 1의 `Hostname`을 서버별로 Agent 2에 이전
+6. 공통 `ServerActive` 설정 적용
+7. Agent 2 설정 및 아이템 키 검증
+8. Agent 1 중지 후 Agent 2 시작
+9. 실패 시 Agent 1 자동 재시작
 
 Agent 1 패키지와 설정은 삭제하지 않으므로 별도 롤백 플레이북을 사용할 수 있습니다.
 
