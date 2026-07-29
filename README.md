@@ -58,6 +58,48 @@ zabbix_agent2_manage_docker_access=true
 해당 호스트에서는 `zabbix` 사용자를 `docker` 그룹에 추가하고 전환 전에
 `docker.info` 키를 자동 검증합니다. 일반 호스트에는 Docker 권한을 추가하지 않습니다.
 
+### 일반 사용자 로그인 후 `su -` 사용
+
+PEM 키와 `sudo` 대신 일반 사용자 비밀번호로 SSH 로그인한 후 `su - root`로
+권한을 상승해야 한다면 전용 예시를 사용합니다.
+
+```bash
+cp inventory/hosts-su.ini.example inventory/hosts.ini
+vi inventory/hosts.ini
+```
+
+핵심 설정은 다음과 같습니다.
+
+```ini
+[zabbix_agents]
+server01 ansible_host=10.0.0.11 ansible_user=monitoring
+
+[zabbix_agents:vars]
+ansible_connection=ssh
+ansible_become=true
+ansible_become_method=su
+ansible_become_user=root
+ansible_become_flags=-
+```
+
+일반 사용자 SSH 비밀번호와 root 비밀번호는 파일에 평문으로 저장하지 않고 실행할 때
+각각 입력합니다.
+
+```bash
+ansible -i inventory/hosts.ini zabbix_agent2_pilot \
+  -b -m command -a "id" \
+  --ask-pass --ask-become-pass
+
+ansible-playbook -i inventory/hosts.ini \
+  playbooks/migrate.yml \
+  --limit zabbix_agent2_pilot \
+  --ask-pass --ask-become-pass
+```
+
+첫 번째 프롬프트에는 일반 사용자 SSH 비밀번호를, `BECOME password` 프롬프트에는
+`su - root`에 사용하는 root 비밀번호를 입력합니다. 비밀번호 자동화가 필요하면
+`ansible_password`와 `ansible_become_password`를 Ansible Vault로 암호화해서 사용합니다.
+
 ## 2. 변수 설정
 
 `group_vars/zabbix_agents.yml`에서 Zabbix Server 주소를 변경합니다.
