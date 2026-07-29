@@ -336,6 +336,10 @@
 - name: Test Agent 2 item keys before cutover
   ansible.builtin.command:
     argv:
+      - /usr/sbin/runuser
+      - -u
+      - "{{ zabbix_agent2_service_user }}"
+      - --
       - "{{ zabbix_agent2_binary }}"
       - -t
       - "{{ item }}"
@@ -353,7 +357,6 @@
       ) | unique | list
     }}
   register: zabbix_agent2_key_tests
-  become_user: "{{ zabbix_agent2_service_user }}"
   changed_when: false
   failed_when: >-
     zabbix_agent2_key_tests.rc != 0 or
