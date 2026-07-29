@@ -8,6 +8,11 @@ zabbix_server_passive_allowlist: "192.0.2.10"
 zabbix_server_active: "192.0.2.10:10051"
 zabbix_agent2_hostname_override: ""
 
+# Debian/Ubuntu에서는 공식 Zabbix 7.0 저장소를 자동으로 구성합니다.
+# 이미 7.0 저장소가 설정되어 있으면 변경하지 않습니다.
+zabbix_manage_repository: true
+zabbix_repository_major_version: "7.0"
+
 zabbix_agent2_listen_port: 10050
 zabbix_agent2_listen_ip: "0.0.0.0"
 zabbix_agent2_timeout: 3

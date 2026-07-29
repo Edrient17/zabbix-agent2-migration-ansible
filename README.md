@@ -6,15 +6,16 @@ Zabbix Agent 1을 Agent 2로 순차 전환하는 Ansible 저장소입니다.
 
 ## 동작
 
-1. Agent 2 패키지 설치
-2. 공통 `Server` 설정을 적용해 Passive check 유지
-3. Agent 1의 메인 설정에 직접 작성된 `UserParameter` 이전
-4. 일반적인 Agent 1 include 디렉터리의 `*.conf`에서 `UserParameter=` 줄 이전
-5. 기존 Agent 1의 `Hostname`을 서버별로 Agent 2에 이전
-6. 공통 `ServerActive` 설정 적용
-7. Agent 2 설정 및 아이템 키 검증
-8. Agent 1 중지 후 Agent 2 시작
-9. 실패 시 Agent 1 자동 재시작
+1. Debian/Ubuntu에서 공식 Zabbix 7.0 패키지 저장소 구성
+2. Agent 2 패키지 설치
+3. 공통 `Server` 설정을 적용해 Passive check 유지
+4. Agent 1의 메인 설정에 직접 작성된 `UserParameter` 이전
+5. 일반적인 Agent 1 include 디렉터리의 `*.conf`에서 `UserParameter=` 줄 이전
+6. 기존 Agent 1의 `Hostname`을 서버별로 Agent 2에 이전
+7. 공통 `ServerActive` 설정 적용
+8. Agent 2 설정 및 아이템 키 검증
+9. Agent 1 중지 후 Agent 2 시작
+10. 실패 시 Agent 1 자동 재시작
 
 Agent 1 패키지와 설정은 삭제하지 않으므로 별도 롤백 플레이북을 사용할 수 있습니다.
 
@@ -22,12 +23,12 @@ Agent 1 패키지와 설정은 삭제하지 않으므로 별도 롤백 플레이
 
 - Debian/Ubuntu 또는 RHEL 계열 Linux
 - 대상 서버에 기존 Zabbix Agent 1이 설치되어 있음
-- 대상 서버에 Zabbix 7.0 공식 패키지 저장소가 설정되어 있음
 - Ansible 제어 노드에서 SSH 및 root 권한 상승 가능
 - Passive check용 `10050/TCP` 정책은 기존 상태 유지
 
-이 저장소는 Zabbix 패키지 저장소 자체를 추가하지 않습니다. 운영체제와 버전에 맞는
-Zabbix 7.0 공식 저장소를 먼저 설정해야 합니다.
+Debian/Ubuntu에서는 기존 `/etc/apt/sources.list.d/zabbix.list`가 다른 버전을
+가리키면 운영체제 버전에 맞는 공식 Zabbix 7.0 저장소로 자동 교체합니다.
+RHEL 계열에서는 운영체제에 맞는 Zabbix 7.0 공식 저장소를 먼저 설정해야 합니다.
 
 ## 1. 인벤토리 준비
 
@@ -54,6 +55,8 @@ server01
 ```yaml
 zabbix_server_passive_allowlist: "10.0.0.10"
 zabbix_server_active: "10.0.0.10:10051"
+zabbix_manage_repository: true
+zabbix_repository_major_version: "7.0"
 ```
 
 `zabbix_server_active`는 모든 대상 서버에 공통 적용됩니다. `Hostname`은 기존
@@ -68,6 +71,12 @@ Active check를 사용하지 않을 대상 그룹은 다음처럼 비활성화�
 
 ```yaml
 zabbix_server_active: ""
+```
+
+Debian/Ubuntu에서 저장소를 별도로 관리한다면 자동 구성을 끌 수 있습니다.
+
+```yaml
+zabbix_manage_repository: false
 ```
 
 기존 Agent 1의 `Include` 경로가 다르면 다음 목록을 수정합니다.
@@ -158,6 +167,8 @@ ansible-playbook playbooks/rollback.yml
 
 ## 주의사항
 
+- 저장소 변경 자체는 Agent 1 패키지나 서비스를 중지하지 않습니다.
+- Agent 2 후보 버전이 `zabbix_repository_major_version`과 다르면 전환 전에 중단합니다.
 - `ServerActive`가 설정되면 기존 Agent 1의 `Hostname`을 Agent 2에 자동 이전합니다.
 - Active check의 `Hostname`은 Zabbix UI의 호스트명과 정확히 일치해야 합니다.
 - include 디렉터리의 `*.conf`에서는 `UserParameter=` 줄만 추출합니다.

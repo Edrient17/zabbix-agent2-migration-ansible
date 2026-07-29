@@ -21,6 +21,125 @@
       - zabbix_agent1_config_stat.stat.isreg
     fail_msg: "Agent 1 configuration was not found at {{ zabbix_agent1_config_file }}."
 
+- name: Validate automatic Zabbix repository support
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution in ["Debian", "Ubuntu"]
+    fail_msg: >-
+      Automatic Zabbix repository setup supports Debian and Ubuntu.
+      Configure the repository separately or set zabbix_manage_repository=false.
+  when:
+    - zabbix_manage_repository | bool
+    - ansible_os_family == "Debian"
+
+- name: Check whether the requested Zabbix repository is configured
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -Eq
+      - "^deb .*repo\\.zabbix\\.com/zabbix/{{ zabbix_repository_major_version | regex_escape }}/"
+      - "{{ zabbix_repository_list_file }}"
+  register: zabbix_repository_check
+  changed_when: false
+  failed_when: false
+  when:
+    - zabbix_manage_repository | bool
+    - ansible_os_family == "Debian"
+
+- name: Resolve the official Zabbix repository package URL
+  ansible.builtin.set_fact:
+    zabbix_repository_effective_package_url: >-
+      {{
+        zabbix_repository_package_url
+        if zabbix_repository_package_url | length > 0
+        else
+          'https://repo.zabbix.com/zabbix/'
+          ~ zabbix_repository_major_version
+          ~ '/'
+          ~ (ansible_distribution | lower)
+          ~ '/pool/main/z/zabbix-release/zabbix-release_latest_'
+          ~ zabbix_repository_major_version
+          ~ '+'
+          ~ (ansible_distribution | lower)
+          ~ (
+              ansible_distribution_version
+              if ansible_distribution == 'Ubuntu'
+              else ansible_distribution_major_version
+            )
+          ~ '_all.deb'
+      }}
+  when:
+    - zabbix_manage_repository | bool
+    - ansible_os_family == "Debian"
+    - zabbix_repository_check.rc != 0
+
+- name: Remove an outdated Zabbix repository list
+  ansible.builtin.file:
+    path: "{{ zabbix_repository_list_file }}"
+    state: absent
+  when:
+    - zabbix_manage_repository | bool
+    - ansible_os_family == "Debian"
+    - zabbix_repository_check.rc != 0
+
+- name: Download the official Zabbix repository package
+  ansible.builtin.get_url:
+    url: "{{ zabbix_repository_effective_package_url }}"
+    dest: "{{ zabbix_repository_package_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    timeout: 60
+  when:
+    - zabbix_manage_repository | bool
+    - ansible_os_family == "Debian"
+    - zabbix_repository_check.rc != 0
+
+- name: Install the official Zabbix repository configuration
+  ansible.builtin.command:
+    argv:
+      - dpkg
+      - --force-confnew
+      - -i
+      - "{{ zabbix_repository_package_path }}"
+  when:
+    - zabbix_manage_repository | bool
+    - ansible_os_family == "Debian"
+    - zabbix_repository_check.rc != 0
+
+- name: Refresh the package cache for the requested repository
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when:
+    - zabbix_manage_repository | bool
+    - ansible_os_family == "Debian"
+
+- name: Read the Agent 2 package candidate
+  ansible.builtin.command:
+    argv:
+      - apt-cache
+      - policy
+      - "{{ zabbix_agent2_package_name }}"
+  register: zabbix_agent2_package_policy
+  changed_when: false
+  when: ansible_os_family == "Debian"
+
+- name: Require an Agent 2 package from the requested Zabbix release
+  ansible.builtin.assert:
+    that:
+      - "'Candidate: (none)' not in zabbix_agent2_package_policy.stdout"
+      - >-
+        ('Candidate: ' ~ zabbix_repository_major_version ~ '.')
+        in zabbix_agent2_package_policy.stdout
+        or
+        ('Candidate: 1:' ~ zabbix_repository_major_version ~ '.')
+        in zabbix_agent2_package_policy.stdout
+    fail_msg: >-
+      No Zabbix {{ zabbix_repository_major_version }} Agent 2 candidate was found.
+      Package policy output: {{ zabbix_agent2_package_policy.stdout }}
+  when: ansible_os_family == "Debian"
+
 - name: Install Agent 2 on Debian family without automatically starting it
   ansible.builtin.apt:
     name: "{{ zabbix_agent2_package_name }}"

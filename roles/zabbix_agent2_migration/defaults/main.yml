@@ -8,6 +8,12 @@ zabbix_agent2_package_name: zabbix-agent2
 zabbix_agent1_service_name: zabbix-agent
 zabbix_agent2_service_name: zabbix-agent2
 
+zabbix_manage_repository: true
+zabbix_repository_major_version: "7.0"
+zabbix_repository_package_url: ""
+zabbix_repository_package_path: "/tmp/zabbix-release-{{ zabbix_repository_major_version }}.deb"
+zabbix_repository_list_file: /etc/apt/sources.list.d/zabbix.list
+
 zabbix_agent1_config_file: /etc/zabbix/zabbix_agentd.conf
 zabbix_agent2_config_file: /etc/zabbix/zabbix_agent2.conf
 zabbix_agent2_include_dir: /etc/zabbix/zabbix_agent2.d
