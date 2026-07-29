@@ -4,6 +4,9 @@
   become: true
   gather_facts: false
 
+  vars_files:
+    - ../group_vars/zabbix_agents.yml
+
   tasks:
     - name: Validate Agent 2 configuration
       ansible.builtin.command:
