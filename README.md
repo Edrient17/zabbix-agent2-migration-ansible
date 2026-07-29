@@ -46,7 +46,17 @@ server02 ansible_host=10.0.0.12 ansible_user=ansible
 
 [zabbix_agent2_pilot]
 server01
+
+[zabbix_agent2_docker]
+server01
+
+[zabbix_agent2_docker:vars]
+zabbix_agent2_manage_docker_access=true
 ```
+
+`zabbix_agent2_docker`에는 Docker 템플릿을 사용하는 호스트만 추가합니다.
+해당 호스트에서는 `zabbix` 사용자를 `docker` 그룹에 추가하고 전환 전에
+`docker.info` 키를 자동 검증합니다. 일반 호스트에는 Docker 권한을 추가하지 않습니다.
 
 ## 2. 변수 설정
 
@@ -169,6 +179,8 @@ ansible-playbook playbooks/rollback.yml
 
 - 저장소 변경 자체는 Agent 1 패키지나 서비스를 중지하지 않습니다.
 - Agent 2 후보 버전이 `zabbix_repository_major_version`과 다르면 전환 전에 중단합니다.
+- `docker` 그룹은 Docker API를 통한 높은 시스템 권한을 제공하므로 Docker 모니터링
+  대상에만 `zabbix_agent2_manage_docker_access=true`를 설정하십시오.
 - `ServerActive`가 설정되면 기존 Agent 1의 `Hostname`을 Agent 2에 자동 이전합니다.
 - Active check의 `Hostname`은 Zabbix UI의 호스트명과 정확히 일치해야 합니다.
 - include 디렉터리의 `*.conf`에서는 `UserParameter=` 줄만 추출합니다.

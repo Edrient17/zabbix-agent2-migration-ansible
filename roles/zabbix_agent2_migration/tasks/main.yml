@@ -155,6 +155,34 @@
     state: present
   when: ansible_os_family == "RedHat"
 
+- name: Check the Docker group for Agent 2 access
+  ansible.builtin.command:
+    argv:
+      - getent
+      - group
+      - "{{ zabbix_agent2_docker_group }}"
+  register: zabbix_agent2_docker_group_check
+  changed_when: false
+  failed_when: false
+  when: zabbix_agent2_manage_docker_access | bool
+
+- name: Require the Docker group on Docker monitoring hosts
+  ansible.builtin.assert:
+    that:
+      - zabbix_agent2_docker_group_check.rc == 0
+    fail_msg: >-
+      Group {{ zabbix_agent2_docker_group }} was not found.
+      Install Docker before enabling Agent 2 Docker access.
+  when: zabbix_agent2_manage_docker_access | bool
+
+- name: Grant Agent 2 access to the Docker socket group
+  ansible.builtin.user:
+    name: "{{ zabbix_agent2_service_user }}"
+    groups:
+      - "{{ zabbix_agent2_docker_group }}"
+    append: true
+  when: zabbix_agent2_manage_docker_access | bool
+
 - name: Keep Agent 2 stopped during configuration
   ansible.builtin.service:
     name: "{{ zabbix_agent2_service_name }}"
@@ -313,8 +341,19 @@
       - "{{ item }}"
       - -c
       - "{{ zabbix_agent2_config_file }}"
-  loop: "{{ zabbix_agent2_validation_keys }}"
+  loop: >-
+    {{
+      (
+        zabbix_agent2_validation_keys
+        + (
+            ['docker.info']
+            if zabbix_agent2_manage_docker_access | bool
+            else []
+          )
+      ) | unique | list
+    }}
   register: zabbix_agent2_key_tests
+  become_user: "{{ zabbix_agent2_service_user }}"
   changed_when: false
   failed_when: >-
     zabbix_agent2_key_tests.rc != 0 or

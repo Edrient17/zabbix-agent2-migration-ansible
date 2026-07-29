@@ -7,6 +7,10 @@ zabbix_agent1_package_name: zabbix-agent
 zabbix_agent2_package_name: zabbix-agent2
 zabbix_agent1_service_name: zabbix-agent
 zabbix_agent2_service_name: zabbix-agent2
+zabbix_agent2_service_user: zabbix
+
+zabbix_agent2_manage_docker_access: false
+zabbix_agent2_docker_group: docker
 
 zabbix_manage_repository: true
 zabbix_repository_major_version: "7.0"
