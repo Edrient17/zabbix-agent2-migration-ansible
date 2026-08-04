@@ -1,11 +1,11 @@
 ---
 # Passive check를 수행하는 Zabbix Server의 IP, CIDR 또는 DNS 이름입니다.
 # 여러 값은 쉼표로 구분할 수 있습니다.
-zabbix_server_passive_allowlist: "192.0.2.10"
+zabbix_server_passive_allowlist: "CHANGE_ME"
 
 # Active check 대상입니다. Active check를 사용하지 않으려면 빈 문자열로 설정합니다.
 # Hostname은 기존 Agent 1 설정에서 서버별로 자동 이전됩니다.
-zabbix_server_active: "192.0.2.10:10051"
+zabbix_server_active: ""
 zabbix_agent2_hostname_override: ""
 
 # Debian/Ubuntu에서는 공식 Zabbix 7.0 저장소를 자동으로 구성합니다.

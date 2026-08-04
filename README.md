@@ -91,6 +91,7 @@ ansible -i inventory/hosts.ini zabbix_agent2_pilot \
   --ask-pass --ask-become-pass
 
 ansible-playbook -i inventory/hosts.ini \
+  -e @server-vars.yml \
   playbooks/migrate.yml \
   --limit zabbix_agent2_pilot \
   --ask-pass --ask-become-pass
@@ -102,11 +103,32 @@ ansible-playbook -i inventory/hosts.ini \
 
 ## 2. 변수 설정
 
-`group_vars/zabbix_agents.yml`에서 Zabbix Server 주소를 변경합니다.
+실제 Zabbix Server 주소는 저장소에 커밋하지 않습니다. 예시 파일을 복사해 실값을
+넣고 실행할 때 `-e`로 넘깁니다. `server-vars.yml`은 `.gitignore` 대상입니다.
+
+```bash
+cp server-vars.yml.example server-vars.yml
+vi server-vars.yml
+```
 
 ```yaml
 zabbix_server_passive_allowlist: "10.0.0.10"
 zabbix_server_active: "10.0.0.10:10051"
+```
+
+```bash
+ansible-playbook -e @server-vars.yml playbooks/migrate.yml
+```
+
+넘기지 않으면 `group_vars/zabbix_agents.yml`의 값이 `CHANGE_ME`로 남아 있어
+역할의 assert가 **배포 전에 실행을 중단합니다.** 잘못된 주소로 Agent가 설정되는
+일을 막기 위한 장치이므로 이 기본값은 바꾸지 않습니다.
+
+`verify.yml`과 `rollback.yml`은 서버 주소를 쓰지 않으므로 `-e` 없이 실행합니다.
+
+저장소 설정 등 나머지 값은 `group_vars/zabbix_agents.yml`에서 조정합니다.
+
+```yaml
 zabbix_manage_repository: true
 zabbix_repository_major_version: "7.0"
 ```
@@ -166,7 +188,7 @@ SSH 또는 권한 상승 암호가 필요하면 `--ask-pass --ask-become-pass`�
 ## 4. 한 대에서 먼저 전환
 
 ```bash
-ansible-playbook playbooks/migrate.yml --limit zabbix_agent2_pilot
+ansible-playbook -e @server-vars.yml playbooks/migrate.yml --limit zabbix_agent2_pilot
 ```
 
 Zabbix Server에서 확인합니다.
@@ -186,13 +208,13 @@ journalctl -u zabbix-agent2 --since "10 minutes ago"
 기본값은 한 번에 10대입니다.
 
 ```bash
-ansible-playbook playbooks/migrate.yml
+ansible-playbook -e @server-vars.yml playbooks/migrate.yml
 ```
 
 실행 시 묶음 크기를 변경할 수 있습니다.
 
 ```bash
-ansible-playbook playbooks/migrate.yml \
+ansible-playbook -e @server-vars.yml playbooks/migrate.yml \
   -e zabbix_agent2_migration_serial=20
 ```
 
