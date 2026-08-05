@@ -110,7 +110,13 @@
 - name: Refresh the package cache for the requested repository
   ansible.builtin.apt:
     update_cache: true
-    cache_valid_time: 3600
+    # cache_valid_time only asks when apt last ran, not whether the sources
+    # changed. A host coming from an older Zabbix repository has just had its
+    # list file replaced, and a cache built from the previous repository leaves
+    # apt with no record of the package at all: the old index no longer belongs
+    # to any configured source, so the candidate lookup returns nothing and the
+    # migration stops. Refresh unconditionally when the repository was changed.
+    cache_valid_time: "{{ 0 if zabbix_repository_check.rc != 0 else 3600 }}"
   when:
     - zabbix_manage_repository | bool
     - ansible_os_family == "Debian"
