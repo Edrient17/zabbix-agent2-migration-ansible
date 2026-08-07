@@ -1,0 +1,107 @@
+---
+- name: Install Agent 2 on Debian family without automatically starting it
+  ansible.builtin.apt:
+    name: "{{ zabbix_agent2_package_name }}"
+    state: present
+    update_cache: "{{ zabbix_agent2_update_package_cache }}"
+    policy_rc_d: 101
+    lock_timeout: 120
+  when: ansible_os_family == "Debian"
+
+- name: Install Agent 2 on RHEL family
+  ansible.builtin.package:
+    name: "{{ zabbix_agent2_package_name }}"
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Keep Agent 2 stopped during configuration
+  ansible.builtin.service:
+    name: "{{ zabbix_agent2_service_name }}"
+    state: stopped
+
+- name: Read the installed Agent 2 package version on Debian family
+  ansible.builtin.command:
+    argv:
+      - dpkg-query
+      - -W
+      - "-f=${Version}"
+      - "{{ zabbix_agent2_package_name }}"
+  register: zabbix_agent2_dpkg_version
+  changed_when: false
+  failed_when: false
+  when: ansible_os_family == "Debian"
+
+- name: Require the requested Agent 2 release on Debian family
+  ansible.builtin.assert:
+    that:
+      - zabbix_agent2_dpkg_version.rc == 0
+      - >-
+        zabbix_agent2_dpkg_version.stdout
+        is match('^(?:[0-9]+:)?' ~ (zabbix_repository_major_version | regex_escape) ~ '([.-]|$)')
+    fail_msg: >-
+      Installed {{ zabbix_agent2_package_name }} version
+      {{ zabbix_agent2_dpkg_version.stdout | default('unknown') }} does not match
+      requested release {{ zabbix_repository_major_version }}.
+  when: ansible_os_family == "Debian"
+
+- name: Read the installed Agent 2 package version on RHEL family
+  ansible.builtin.command:
+    argv:
+      - rpm
+      - -q
+      - --queryformat
+      - "%{VERSION}"
+      - "{{ zabbix_agent2_package_name }}"
+  register: zabbix_agent2_rpm_version
+  changed_when: false
+  failed_when: false
+  when: ansible_os_family == "RedHat"
+
+- name: Require the requested Agent 2 release on RHEL family
+  ansible.builtin.assert:
+    that:
+      - zabbix_agent2_rpm_version.rc == 0
+      - >-
+        zabbix_agent2_rpm_version.stdout
+        is match('^' ~ (zabbix_repository_major_version | regex_escape) ~ '([.-]|$)')
+    fail_msg: >-
+      Installed {{ zabbix_agent2_package_name }} version
+      {{ zabbix_agent2_rpm_version.stdout | default('unknown') }} does not match
+      requested release {{ zabbix_repository_major_version }}.
+  when: ansible_os_family == "RedHat"
+
+- name: Check the Docker group for Agent 2 access
+  ansible.builtin.command:
+    argv:
+      - getent
+      - group
+      - "{{ zabbix_agent2_docker_group }}"
+  register: zabbix_agent2_docker_group_check
+  changed_when: false
+  failed_when: false
+  when: zabbix_agent2_manage_docker_access | bool
+
+- name: Require the Docker group on Docker monitoring hosts
+  ansible.builtin.assert:
+    that:
+      - zabbix_agent2_docker_group_check.rc == 0
+    fail_msg: >-
+      Group {{ zabbix_agent2_docker_group }} was not found.
+      Install Docker before enabling Agent 2 Docker access.
+  when: zabbix_agent2_manage_docker_access | bool
+
+- name: Grant Agent 2 access to the Docker socket group
+  ansible.builtin.user:
+    name: "{{ zabbix_agent2_service_user }}"
+    groups:
+      - "{{ zabbix_agent2_docker_group }}"
+    append: true
+  when: zabbix_agent2_manage_docker_access | bool
+
+- name: Create Agent 2 include directory
+  ansible.builtin.file:
+    path: "{{ zabbix_agent2_include_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"

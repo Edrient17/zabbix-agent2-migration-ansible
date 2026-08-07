@@ -5,8 +5,5 @@
   gather_facts: true
   serial: "{{ zabbix_agent2_migration_serial | default(10) }}"
 
-  vars_files:
-    - ../group_vars/zabbix_agents.yml
-
   roles:
     - role: zabbix_agent2_migration

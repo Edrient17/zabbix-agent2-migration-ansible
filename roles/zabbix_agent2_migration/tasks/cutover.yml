@@ -1,0 +1,48 @@
+---
+- name: Cut over services with automatic rollback on failure
+  block:
+    - name: Stop and disable Agent 1
+      ansible.builtin.service:
+        name: "{{ zabbix_agent1_service_name }}"
+        state: stopped
+        enabled: false
+
+    - name: Start and enable Agent 2
+      ansible.builtin.service:
+        name: "{{ zabbix_agent2_service_name }}"
+        state: started
+        enabled: true
+
+    - name: Wait for Agent 2 passive port
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ zabbix_agent2_listen_port }}"
+        state: started
+        timeout: 15
+
+  rescue:
+    - name: Stop Agent 2 after failed cutover
+      ansible.builtin.service:
+        name: "{{ zabbix_agent2_service_name }}"
+        state: stopped
+        enabled: false
+      ignore_errors: true
+
+    - name: Restore Agent 1 after failed cutover
+      ansible.builtin.service:
+        name: "{{ zabbix_agent1_service_name }}"
+        state: started
+        enabled: true
+      ignore_errors: true
+
+    - name: Report failed cutover
+      ansible.builtin.fail:
+        msg: >-
+          Agent 2 cutover failed. The role attempted to restore Agent 1.
+          Check the Agent 2 service log before retrying.
+
+- name: Report successful migration
+  ansible.builtin.debug:
+    msg: >-
+      Agent 2 is running on port {{ zabbix_agent2_listen_port }}.
+      Agent 1 remains installed for rollback.

@@ -4,9 +4,6 @@
   become: true
   gather_facts: false
 
-  vars_files:
-    - ../group_vars/zabbix_agents.yml
-
   tasks:
     - name: Validate Agent 2 configuration
       ansible.builtin.command:
@@ -17,6 +14,38 @@
           - "{{ zabbix_agent2_config_file | default('/etc/zabbix/zabbix_agent2.conf') }}"
       changed_when: false
 
+    - name: Test Agent 2 item keys as the service user
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/runuser
+          - -u
+          - "{{ zabbix_agent2_service_user | default('zabbix') }}"
+          - --
+          - "{{ zabbix_agent2_binary | default('/usr/sbin/zabbix_agent2') }}"
+          - -t
+          - "{{ item }}"
+          - -c
+          - "{{ zabbix_agent2_config_file | default('/etc/zabbix/zabbix_agent2.conf') }}"
+      loop: >-
+        {{
+          (
+            (zabbix_agent2_validation_keys | default(['agent.ping']))
+            + (
+                ['docker.info']
+                if zabbix_agent2_manage_docker_access | default(false) | bool
+                else []
+              )
+          ) | unique | list
+        }}
+      register: zabbix_agent2_verify_key_tests
+      changed_when: false
+      failed_when: >-
+        zabbix_agent2_verify_key_tests.rc != 0
+        or 'ZBX_NOTSUPPORTED' in (zabbix_agent2_verify_key_tests.stdout | default(''))
+        or '[m|' in (zabbix_agent2_verify_key_tests.stdout | default(''))
+        or 'ZBX_NOTSUPPORTED' in (zabbix_agent2_verify_key_tests.stderr | default(''))
+        or '[m|' in (zabbix_agent2_verify_key_tests.stderr | default(''))
+
     - name: Check Agent 2 service
       ansible.builtin.command:
         argv:
@@ -24,6 +53,23 @@
           - is-active
           - "{{ zabbix_agent2_service_name | default('zabbix-agent2') }}"
       changed_when: false
+
+    - name: Check that Agent 1 is inactive
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - "{{ zabbix_agent1_service_name | default('zabbix-agent') }}"
+      register: zabbix_agent1_service_check
+      changed_when: false
+      failed_when: false
+
+    - name: Require Agent 1 to be inactive
+      ansible.builtin.assert:
+        that:
+          - zabbix_agent1_service_check.rc != 0
+        fail_msg: >-
+          Agent 1 is still active. Stop it before treating this host as migrated.
 
     - name: Check passive port
       ansible.builtin.wait_for:

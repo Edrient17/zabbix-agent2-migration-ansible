@@ -5,9 +5,6 @@
   gather_facts: false
   serial: "{{ zabbix_agent2_migration_serial | default(10) }}"
 
-  vars_files:
-    - ../group_vars/zabbix_agents.yml
-
   tasks:
     - name: Stop and disable Agent 2
       ansible.builtin.service:

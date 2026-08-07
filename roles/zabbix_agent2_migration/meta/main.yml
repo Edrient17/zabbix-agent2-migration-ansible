@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  role_name: zabbix_agent2_migration
+  author: local
+  description: Migrate an existing Zabbix Agent 1 installation to Agent 2
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+    - name: Ubuntu
+    - name: EL
+  galaxy_tags:
+    - zabbix
+    - monitoring
+    - migration
+dependencies: []

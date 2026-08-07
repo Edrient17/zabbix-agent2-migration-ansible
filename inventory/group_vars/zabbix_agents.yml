@@ -3,13 +3,13 @@
 # 여러 값은 쉼표로 구분할 수 있습니다.
 zabbix_server_passive_allowlist: "CHANGE_ME"
 
-# Active check 대상입니다. Active check를 사용하지 않으려면 빈 문자열로 설정합니다.
-# Hostname은 기존 Agent 1 설정에서 서버별로 자동 이전됩니다.
+# Active check를 사용하지 않으려면 빈 문자열로 설정합니다.
+# Hostname은 기존 Agent 1 설정에서 자동 이전됩니다.
 zabbix_server_active: ""
 zabbix_agent2_hostname_override: ""
 
-# Debian/Ubuntu에서는 공식 Zabbix 7.0 저장소를 자동으로 구성합니다.
-# 이미 7.0 저장소가 설정되어 있으면 변경하지 않습니다.
+# Debian/Ubuntu에서 공식 Zabbix 저장소를 자동으로 구성합니다.
+# RHEL 계열은 저장소를 사전에 구성해야 합니다.
 zabbix_manage_repository: true
 zabbix_repository_major_version: "7.0"
 
@@ -18,7 +18,7 @@ zabbix_agent2_listen_ip: "0.0.0.0"
 zabbix_agent2_timeout: 3
 zabbix_agent2_log_file_size: 1
 
-# Agent 1 메인 설정과 아래 디렉터리의 *.conf 파일에서
+# Agent 1 메인 설정과 include 디렉터리의 *.conf에서
 # UserParameter= 줄만 추출해 Agent 2 설정으로 이전합니다.
 zabbix_migrate_inline_userparameters: true
 zabbix_migrate_include_userparameters: true
@@ -26,12 +26,11 @@ zabbix_agent1_include_dirs:
   - /etc/zabbix/zabbix_agentd.d
   - /etc/zabbix/zabbix_agentd.conf.d
 
-# UserParameter 외에 Agent 2에 추가할 설정이 있다면 명시합니다.
+# UserParameter 외에 필요한 Agent 2 설정을 명시적으로 추가합니다.
 zabbix_agent2_extra_config_lines: []
 #  - 'UnsafeUserParameters=1'
-#  - 'AllowKey=system.run[*]'
 
-# 전환 전에 테스트할 키를 추가합니다.
+# 전환 전과 verify 플레이북에서 실행할 키입니다.
 zabbix_agent2_validation_keys:
   - agent.ping
   # - custom.example

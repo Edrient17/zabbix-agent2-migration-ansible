@@ -1,0 +1,22 @@
+---
+- name: Validate migration variables
+  ansible.builtin.assert:
+    that:
+      - zabbix_server_passive_allowlist | length > 0
+      - zabbix_server_passive_allowlist != "CHANGE_ME"
+      - ansible_os_family in ["Debian", "RedHat"]
+    fail_msg: >-
+      Set zabbix_server_passive_allowlist and use a supported Debian/Ubuntu
+      or RHEL-compatible target.
+
+- name: Check Agent 1 configuration
+  ansible.builtin.stat:
+    path: "{{ zabbix_agent1_config_file }}"
+  register: zabbix_agent1_config_stat
+
+- name: Require existing Agent 1 configuration
+  ansible.builtin.assert:
+    that:
+      - zabbix_agent1_config_stat.stat.exists
+      - zabbix_agent1_config_stat.stat.isreg
+    fail_msg: "Agent 1 configuration was not found at {{ zabbix_agent1_config_file }}."

@@ -1,0 +1,41 @@
+---
+- name: Validate Agent 2 configuration before cutover
+  ansible.builtin.command:
+    argv:
+      - "{{ zabbix_agent2_binary }}"
+      - -T
+      - -c
+      - "{{ zabbix_agent2_config_file }}"
+  changed_when: false
+
+- name: Test Agent 2 item keys before cutover
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/runuser
+      - -u
+      - "{{ zabbix_agent2_service_user }}"
+      - --
+      - "{{ zabbix_agent2_binary }}"
+      - -t
+      - "{{ item }}"
+      - -c
+      - "{{ zabbix_agent2_config_file }}"
+  loop: >-
+    {{
+      (
+        zabbix_agent2_validation_keys
+        + (
+            ['docker.info']
+            if zabbix_agent2_manage_docker_access | bool
+            else []
+          )
+      ) | unique | list
+    }}
+  register: zabbix_agent2_key_tests
+  changed_when: false
+  failed_when: >-
+    zabbix_agent2_key_tests.rc != 0
+    or 'ZBX_NOTSUPPORTED' in (zabbix_agent2_key_tests.stdout | default(''))
+    or '[m|' in (zabbix_agent2_key_tests.stdout | default(''))
+    or 'ZBX_NOTSUPPORTED' in (zabbix_agent2_key_tests.stderr | default(''))
+    or '[m|' in (zabbix_agent2_key_tests.stderr | default(''))

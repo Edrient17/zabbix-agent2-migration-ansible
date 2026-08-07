@@ -1,0 +1,150 @@
+---
+- name: Read Agent 1 main configuration
+  ansible.builtin.slurp:
+    path: "{{ zabbix_agent1_config_file }}"
+  register: zabbix_agent1_config_raw
+
+- name: Select Agent 1 Hostname entries
+  ansible.builtin.set_fact:
+    zabbix_agent1_hostname_entries: >-
+      {{
+        (zabbix_agent1_config_raw.content | b64decode).splitlines()
+        | select('match', '^[ \t]*Hostname[ \t]*=')
+        | map('regex_replace', '^[ \t]*Hostname[ \t]*=[ \t]*', '')
+        | list
+      }}
+
+- name: Resolve Agent 2 Hostname
+  ansible.builtin.set_fact:
+    zabbix_agent2_effective_hostname: >-
+      {{
+        zabbix_agent2_hostname_override
+        if zabbix_agent2_hostname_override | length > 0
+        else (zabbix_agent1_hostname_entries | last | default(''))
+      }}
+
+- name: Require a Hostname when active checks are enabled
+  ansible.builtin.assert:
+    that:
+      - >-
+        zabbix_server_active | trim | length == 0
+        or zabbix_agent2_effective_hostname | trim | length > 0
+    fail_msg: >-
+      ServerActive is configured, but no Hostname was found in
+      {{ zabbix_agent1_config_file }}. Set zabbix_agent2_hostname_override for this host.
+
+- name: Select inline UserParameter entries
+  ansible.builtin.set_fact:
+    zabbix_agent1_inline_userparameters: >-
+      {{
+        (zabbix_agent1_config_raw.content | b64decode).splitlines()
+        | select('match', '^[ \t]*UserParameter=')
+        | list
+      }}
+  when: zabbix_migrate_inline_userparameters | bool
+
+- name: Write migrated inline UserParameter entries
+  ansible.builtin.copy:
+    content: |
+      # Migrated from zabbix_agentd.conf
+      {% for userparameter in zabbix_agent1_inline_userparameters | default([]) | unique %}
+      {{ userparameter }}
+      {% endfor %}
+    dest: "{{ zabbix_agent2_include_dir }}/zz-migrated-inline-userparameters.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - zabbix_migrate_inline_userparameters | bool
+    - zabbix_agent1_inline_userparameters | default([]) | length > 0
+
+- name: Remove empty managed inline UserParameter file
+  ansible.builtin.file:
+    path: "{{ zabbix_agent2_include_dir }}/zz-migrated-inline-userparameters.conf"
+    state: absent
+  when:
+    - zabbix_migrate_inline_userparameters | bool
+    - zabbix_agent1_inline_userparameters | default([]) | length == 0
+
+- name: Check possible Agent 1 include directories
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ zabbix_agent1_include_dirs }}"
+  register: zabbix_agent1_include_dir_stats
+  when: zabbix_migrate_include_userparameters | bool
+
+- name: Find Agent 1 configuration fragments
+  ansible.builtin.find:
+    paths: "{{ item.item }}"
+    patterns: "*.conf"
+    file_type: file
+    recurse: false
+  loop: "{{ zabbix_agent1_include_dir_stats.results | default([]) }}"
+  when:
+    - zabbix_migrate_include_userparameters | bool
+    - item.stat.exists | default(false)
+    - item.stat.isdir | default(false)
+  register: zabbix_agent1_fragment_scan
+
+- name: Read Agent 1 configuration fragments
+  ansible.builtin.slurp:
+    path: "{{ item.1.path }}"
+  loop: >-
+    {{
+      (zabbix_agent1_fragment_scan.results | default([]))
+      | subelements('files', skip_missing=True)
+    }}
+  register: zabbix_agent1_fragment_raw
+  when: zabbix_migrate_include_userparameters | bool
+
+- name: Initialize fragment UserParameter list
+  ansible.builtin.set_fact:
+    zabbix_agent1_fragment_userparameters: []
+
+- name: Select UserParameter entries from fragments
+  ansible.builtin.set_fact:
+    zabbix_agent1_fragment_userparameters: >-
+      {{
+        zabbix_agent1_fragment_userparameters
+        + (
+          (item.content | b64decode).splitlines()
+          | select('match', '^[ \t]*UserParameter=')
+          | list
+        )
+      }}
+  loop: "{{ zabbix_agent1_fragment_raw.results | default([]) }}"
+  when:
+    - zabbix_migrate_include_userparameters | bool
+    - item.content is defined
+
+- name: Write migrated fragment UserParameter entries
+  ansible.builtin.copy:
+    content: |
+      # Migrated from Agent 1 include files
+      {% for userparameter in zabbix_agent1_fragment_userparameters | unique %}
+      {{ userparameter }}
+      {% endfor %}
+    dest: "{{ zabbix_agent2_include_dir }}/zz-migrated-include-userparameters.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - zabbix_migrate_include_userparameters | bool
+    - zabbix_agent1_fragment_userparameters | length > 0
+
+- name: Remove empty managed fragment UserParameter file
+  ansible.builtin.file:
+    path: "{{ zabbix_agent2_include_dir }}/zz-migrated-include-userparameters.conf"
+    state: absent
+  when:
+    - zabbix_migrate_include_userparameters | bool
+    - zabbix_agent1_fragment_userparameters | length == 0
+
+- name: Deploy Agent 2 configuration
+  ansible.builtin.template:
+    src: zabbix_agent2.conf.j2
+    dest: "{{ zabbix_agent2_config_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
